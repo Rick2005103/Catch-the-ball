@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Catch The Ball Ultimate</title>
+<style>
+body { text-align: center; background: #222; color: white; font-family: Arial; }
+canvas { background: #333; display: block; margin: 10px auto; border: 2px solid #fff; }
+#hud { margin: 10px; font-size: 18px; }
+button { margin: 5px; padding: 10px 20px; font-size: 16px; border-radius: 8px; border: none; cursor: pointer; }
+#pauseBtn { background: orange; }
+#restartBtn { background: red; display: none; }
+</style>
+</head>
+<body>
+<h1>Catch The Ball Ultimate 🎮</h1>
+<div id="hud">Score: 0 | Level: 1 | Goal: 10 | Lives: 3</div>
+<canvas id="gameCanvas" width="400" height="500"></canvas><br>
+<button id="leftBtn">⬅ Left</button>
+<button id="rightBtn">Right ➡</button>
+<button id="pauseBtn">⏸ Pause</button>
+<button id="restartBtn">🔁 Restart</button>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+const hud = document.getElementById("hud");
+const leftBtn = document.getElementById("leftBtn");
+const rightBtn = document.getElementById("rightBtn");
+const pauseBtn = document.getElementById("pauseBtn");
+const restartBtn = document.getElementById("restartBtn");
+
+let catcher = { x: 160, y: 460, width: 80, height: 20, speed: 5, dx: 0 };
+let balls = [];
+let score = 0, level = 1, goal = 10, lives = 3;
+let paused = false;
+let gameOver = false;
+let win = false;
+let heartDroppedThisLevel = false;
+
+function drawCatcher() {
+    ctx.fillStyle = "cyan";
+    ctx.fillRect(catcher.x, catcher.y, catcher.width, catcher.height);
+}
+
+function spawnBall() {
+    let typeChance = Math.random();
+    let type = "normal";
+    if (level >= 5 && typeChance > 0.95) type = "deadly";
+    else if (!heartDroppedThisLevel && typeChance > 0.9) { type = "heart"; heartDroppedThisLevel = true; }
+    else if (typeChance < 0.7) type = "normal";
+    else if (typeChance < 0.85) type = "bonus";
+    else type = "trap";
+
+    let speed = 2 + level * 0.5;
+    if (type === "bonus") speed += 2;
+    if (type === "deadly") speed += 3;
+    if (type === "heart") speed += 4;
+
+    balls.push({ x: Math.random() * (canvas.width - 20), y: 0, size: 20, type: type, speed: speed });
+}
+
+function drawBalls() {
+    balls.forEach(ball => {
+        if (ball.type === "normal") ctx.fillStyle = "lime";
+        if (ball.type === "bonus") ctx.fillStyle = "gold";
+        if (ball.type === "trap") ctx.fillStyle = "red";
+        if (ball.type === "deadly") ctx.fillStyle = "black";
+        if (ball.type === "heart") ctx.fillStyle = "pink";
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.size, 0, Math.PI * 2);
+        ctx.fill();
+    });
+}
+
+function updateBalls() {
+    balls.forEach((ball, i) => {
+        ball.y += ball.speed;
+        if (ball.y + ball.size > catcher.y &&
+            ball.x > catcher.x && ball.x < catcher.x + catcher.width) {
+            if (ball.type === "normal") score++;
+            if (ball.type === "bonus") score += 2;
+            if (ball.type === "trap") { score -= 2; lives--; }
+            if (ball.type === "deadly") gameOver = true;
+            if (ball.type === "heart") { lives++; }
+            balls.splice(i, 1);
+        } else if (ball.y > canvas.height) {
+            balls.splice(i, 1);
+        }
+    });
+}
+
+function updateHUD() {
+    hud.innerText = `Score: ${score} | Level: ${level} | Goal: ${goal} | Lives: ${lives}`;
+}
+
+function nextLevel() {
+    if (score >= goal) {
+        level++;
+        goal += 10;
+        heartDroppedThisLevel = false;
+        if (level > 10) { win = true; paused = true; }
+    }
+}
+
+function checkGameOver() {
+    if (lives <= 0 || score < 0) gameOver = true;
+    if (gameOver) paused = true;
+}
+
+function drawMessage(text, color) {
+    ctx.fillStyle = color;
+    ctx.font = "30px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+}
+
+function gameLoop() {
+    if (!paused) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawCatcher();
+        if (Math.random() < 0.03 + level * 0.002) spawnBall();
+        drawBalls();
+        updateBalls();
+        catcher.x += catcher.dx;
+        if (catcher.x < 0) catcher.x = 0;
+        if (catcher.x + catcher.width > canvas.width) catcher.x = canvas.width - catcher.width;
+        updateHUD();
+        nextLevel();
+        checkGameOver();
+    } else {
+        if (gameOver) drawMessage("GAME OVER!", "red");
+        if (win) drawMessage("YOU WIN 🎉", "gold");
+    }
+    requestAnimationFrame(gameLoop);
+}
+
+// Controls
+document.addEventListener("keydown", e => {
+    if (e.key === "ArrowLeft") catcher.dx = -catcher.speed;
+    if (e.key === "ArrowRight") catcher.dx = catcher.speed;
+    if (e.key.toLowerCase() === "p") paused = !paused;
+});
+document.addEventListener("keyup", e => { if (e.key === "ArrowLeft" || e.key === "ArrowRight") catcher.dx = 0; });
+leftBtn.addEventListener("mousedown", () => catcher.dx = -catcher.speed);
+rightBtn.addEventListener("mousedown", () => catcher.dx = catcher.speed);
+document.addEventListener("mouseup", () => catcher.dx = 0);
+pauseBtn.addEventListener("click", () => paused = !paused);
+restartBtn.addEventListener("click", () => restartGame());
+
+// Drag controls
+canvas.addEventListener("mousemove", e => { let rect = canvas.getBoundingClientRect(); catcher.x = e.clientX - rect.left - catcher.width/2; });
+canvas.addEventListener("touchmove", e => { let rect = canvas.getBoundingClientRect(); catcher.x = e.touches[0].clientX - rect.left - catcher.width/2; });
+
+function restartGame() {
+    score = 0; level = 1; goal = 10; lives = 3;
+    balls = []; gameOver = false; win = false; paused = false; heartDroppedThisLevel = false;
+    restartBtn.style.display = "none";
+}
+
+function monitorGame() {
+    if (gameOver || win) restartBtn.style.display = "inline-block";
+    requestAnimationFrame(monitorGame);
+}
+
+gameLoop();
+monitorGame();
+</script>
+</body>
+</html>
